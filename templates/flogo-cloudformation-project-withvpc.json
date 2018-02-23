@@ -1,0 +1,165 @@
+{
+    "Description": "This template creates an EC2 instance that has the Flogo Web UI started.",
+    "Parameters": {
+        "InstanceType": {
+            "Description": "Select an instance type for the EC2 instance",
+            "Type": "String",
+            "Default": "t2.medium",
+            "AllowedValues": [
+                "t2.small",
+                "t2.medium",
+                "t2.large",
+                "t2.xlarge",
+                "m3.medium",
+                "m3.large"
+            ],
+            "ConstraintDescription": "InstanceType must be a valid EC2 instance type."
+        },
+        "VolSize": {
+            "Description": "Volume Size (GB) for EC2 instances.",
+            "Type": "Number",
+            "Default": 30,
+            "MaxValue": 256,
+            "MinValue": 15,
+            "ConstraintDescription": "VolumeSize must be numeric and between 15 and 256."
+        },
+        "KeyName": {
+            "Description": "Select an existing key pair. You must provide an existing key pair to be able to SSH into EC2 instances",
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "MinLength": 1,
+            "MaxLength": 64,
+            "AllowedPattern": "[-_ a-zA-Z0-9]*",
+            "ConstraintDescription": "Must be the name of an existing keypair. It can contain only alphanumeric characters, spaces, dashes and underscores."
+        }
+    },
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Flogo EC2 Configuration"
+                    },
+                    "Parameters": [
+                        "InstanceType",
+                        "VolSize",
+                        "KeyName"
+                        ]
+                }
+                ],
+                "ParamaterLabels": {
+                    "InstanceType": {
+                        "default": "EC2 Instance Type:"
+                    },
+                    "VolSize": {
+                        "default": "Volume Size:"
+                    },
+                    "KeyName": {
+                        "default": "Key Pair:"
+                    }
+                }
+
+
+        }
+    },
+    "Conditions": {
+        "HasKeyName": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                        "Ref": "KeyName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasVolSize": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "VolSize"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Mappings": {
+        "AWSRegionToAMI": {
+            "us-east-1": {
+                "AMI": "ami-615f0e1b"
+            }
+        }
+    },
+
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources": {
+        "FlogoEC2Instance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "AWSRegionToAMI",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AMI"
+                    ]
+                },
+                "InstanceType": "t2.medium",
+                "KeyName": {
+                    "Fn::If": [
+                        "HasKeyName",
+                        {
+                            "Ref": "KeyName"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "SecurityGroups": [
+                    {
+                        "Ref": "BaseSecurityGroup"
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Sub": "#!/bin/bash\nsudo service docker start\ndocker run -d -it -p 3303:3303 --name flogo flogo/flogo-docker eula-accept"
+                    }
+                }
+            }
+        },
+        "BaseSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Base security group",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": "22",
+                        "ToPort": "22"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": "3303",
+                        "ToPort": "3303"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "EC2Instance": {
+            "Description": "A reference to the EC2 Instance",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/ec2/v2/home?region=${AWS::Region}#Instances:sort=instanceState"
+            }
+        }
+    }
+}
